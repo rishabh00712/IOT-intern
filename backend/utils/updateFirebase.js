@@ -1,12 +1,9 @@
-const axios = require('axios');
-
-const FIREBASE_URL = 'https://your-project-id.firebaseio.com/firmware.json';
+const db = require('../config/firebase');
 
 module.exports = async function updateFirebase(version, url) {
-  const payload = {
-    version: version,
-    url: url,
-  };
-
-  await axios.put(FIREBASE_URL, payload);
+  try {
+    await db.ref('firmware').set({ version, url });
+  } catch (err) {
+    throw new Error('Firebase update failed: ' + err.message);
+  }
 };
