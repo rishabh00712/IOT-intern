@@ -1,22 +1,24 @@
 const cloudinary = require('cloudinary').v2;
 const fs = require('fs');
 
+// Setup cloudinary config (you should use dotenv in production)
 cloudinary.config({
-  cloud_name: 'YOUR_CLOUD_NAME',
-  api_key: 'YOUR_API_KEY',
-  api_secret: 'YOUR_API_SECRET',
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-module.exports = function uploadToCloudinary(filePath) {
-  return new Promise((resolve, reject) => {
-    cloudinary.uploader.upload(
-      filePath,
-      { resource_type: 'raw' }, // for .bin files
-      (error, result) => {
-        fs.unlinkSync(filePath); // Clean up local file
-        if (error) return reject(error);
-        resolve(result.secure_url);
-      }
-    );
-  });
+module.exports = async function uploadToCloudinary(filePath) {
+  try {
+    const result = await cloudinary.uploader.upload(filePath, {
+      resource_type: 'raw', // Needed for .bin files
+    });
+
+    fs.unlink(filePath, () => {}); // Delete local file after upload
+    return result.secure_url;
+
+  } catch (err) {
+    fs.unlink(filePath, () => {}); // Cleanup on error
+    throw new Error('Cloudinary upload failed: ' + err.message);
+  }
 };
