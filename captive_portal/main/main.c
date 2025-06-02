@@ -28,8 +28,12 @@
 
 extern const char root_start[] asm("_binary_root_html_start");
 extern const char root_end[] asm("_binary_root_html_end");
+bool connected = false;
 
 static const char *TAG = "example";
+// static void wifi_init_softap(void);
+static void check();
+
 
 static void wifi_event_handler(void *arg, esp_event_base_t event_base,
                                int32_t event_id, void *event_data)
@@ -104,7 +108,7 @@ static esp_err_t connect_post_handler(httpd_req_t *req)
 // If the connection is successful, it will return
 // If the connection fails, it will return and the device will stay in AP mode
 
-#define MAX_WIFI_RETRIES 15
+#define MAX_WIFI_RETRIES 5
 static EventGroupHandle_t wifi_event_group;
 #define WIFI_CONNECTED_BIT BIT0
 #define WIFI_FAIL_BIT BIT1
@@ -128,6 +132,8 @@ static void wifi_sta_event_handler(void *arg, esp_event_base_t event_base,
         }
         else
         {
+            ESP_LOGE(TAG, "Failed to connect after %d retries. Switching to SoftAP mode.", MAX_WIFI_RETRIES);
+            check();
             xEventGroupSetBits(wifi_event_group, WIFI_FAIL_BIT);
         }
     }
@@ -303,6 +309,26 @@ static httpd_handle_t start_webserver(void)
     return server;
 }
 
+static void check() {
+    connected = try_connect_to_saved_wifi();
+
+    // Fallback to AP if connection failed
+    if (!connected)
+    {
+        wifi_init_softap();
+
+#ifdef CONFIG_ESP_ENABLE_DHCP_CAPTIVEPORTAL
+        dhcp_set_captiveportal_url();
+#endif
+        // Start captive portal HTTP server
+        start_webserver();
+
+        // Start DNS redirection server
+        dns_server_config_t config = DNS_SERVER_CONFIG_SINGLE("*", "WIFI_AP_DEF");
+        start_dns_server(&config);
+    }
+}
+
 void app_main(void)
 {
     // Reduce HTTP log noise
@@ -324,22 +350,25 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
     ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
 
+    //
+    check();
+
     // Try connecting to saved Wi-Fi
-    bool connected = try_connect_to_saved_wifi();
+    // bool connected = try_connect_to_saved_wifi();
 
     // Fallback to AP if connection failed
-    if (!connected)
-    {
-        wifi_init_softap();
+//     if (!connected)
+//     {
+//         wifi_init_softap();
 
-#ifdef CONFIG_ESP_ENABLE_DHCP_CAPTIVEPORTAL
-        dhcp_set_captiveportal_url();
-#endif
-        // Start captive portal HTTP server
-        start_webserver();
+// #ifdef CONFIG_ESP_ENABLE_DHCP_CAPTIVEPORTAL
+//         dhcp_set_captiveportal_url();
+// #endif
+//         // Start captive portal HTTP server
+//         start_webserver();
 
-        // Start DNS redirection server
-        dns_server_config_t config = DNS_SERVER_CONFIG_SINGLE("*", "WIFI_AP_DEF");
-        start_dns_server(&config);
-    }
+//         // Start DNS redirection server
+//         dns_server_config_t config = DNS_SERVER_CONFIG_SINGLE("*", "WIFI_AP_DEF");
+//         start_dns_server(&config);
+//     }
 }
